@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Câu hỏi dành cho bạn</title>
+    <!-- Tải Tailwind CSS để trang web đẹp hơn -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tải font chữ dễ thương từ Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* CSS tùy chỉnh */
+      body {
+        font-family: "Quicksand", sans-serif;
+        /* Hiệu ứng nền chuyển màu gradient động */
+        background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
+        background-size: 400% 400%;
+        animation: gradient 15s ease infinite;
+      }
+
+      /* Animation cho nền */
+      @keyframes gradient {
+        0% {
+          background-position: 0% 50%;
+        }
+        50% {
+          background-position: 100% 50%;
+        }
+        100% {
+          background-position: 0% 50%;
+        }
+      }
+
+      /* Hiệu ứng chuyển động mượt mà cho nút "No" */
+      #no-button {
+        transition: top 0.3s ease-in-out, left 0.3s ease-in-out;
+      }
+    </style>
+  </head>
+  <body class="h-screen overflow-hidden">
+    <!-- Khung Popup tỏ tình -->
+    <div
+      id="popup-modal"
+      class="w-full h-full flex items-center justify-center"
+    >
+      <div
+        id="popup-content"
+        class="relative text-center p-6 md:p-8 bg-white/90 backdrop-blur-sm rounded-xl shadow-2xl max-w-sm mx-4"
+      >
+        <h1 class="text-2xl md:text-4xl font-bold text-gray-800 mb-6">
+          Bạn có phải là chó không
+        </h1>
+        <div class="flex items-center justify-center space-x-4 min-h-[52px]">
+          <!-- Nút Đồng ý -->
+          <button
+            id="yes-button"
+            class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg transition-transform transform hover:scale-105 shadow-lg"
+          >
+            YES
+          </button>
+          <!-- Nút Không đồng ý -->
+          <button
+            id="no-button"
+            class="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg"
+          >
+            NOO
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Màn hình khi crush đồng ý, ban đầu được ẩn đi -->
+    <div
+      id="success-message"
+      class="hidden text-center p-10 bg-white/90 backdrop-blur-sm rounded-xl shadow-2xl max-w-md mx-4"
+    >
+      <h1 class="text-3xl md:text-5xl font-bold text-pink-500 mb-4">
+        YAY! Tốt lắm
+      </h1>
+      <p class="text-gray-700 text-lg">
+        Cảm ơn câu trả lời của bạn, bạn đã được ghi nhận vào danh sách chó trong
+        lớp 11A1
+      </p>
+    </div>
+
+    <script>
+      // Lấy các phần tử HTML cần dùng
+      const popupModal = document.getElementById("popup-modal");
+      const popupContent = document.getElementById("popup-content");
+      const successMessage = document.getElementById("success-message");
+      const yesButton = document.getElementById("yes-button");
+      const noButton = document.getElementById("no-button");
+
+      // Khi bấm nút "Vâng ạ"
+      yesButton.addEventListener("click", () => {
+        // Ẩn khung tỏ tình đi
+        popupModal.classList.add("hidden");
+        // Hiện màn hình thành công
+        successMessage.classList.remove("hidden");
+        // Đưa lại body về trạng thái bình thường để màn hình thành công hiện ra giữa trang
+        document.body.classList.add("flex", "items-center", "justify-center");
+      });
+
+      // Hàm di chuyển nút "No" đến vị trí ngẫu nhiên bên trong khung popup
+      const moveButton = () => {
+        // Đặt position của nút thành 'absolute' để nó di chuyển trong phạm vi của thẻ cha
+        // thẻ cha (popup-content) đã được đặt `position: relative` bằng class của Tailwind.
+        noButton.style.position = "absolute";
+
+        // Lấy kích thước của khung popup
+        const containerWidth = popupContent.offsetWidth;
+        const containerHeight = popupContent.offsetHeight;
+
+        // Lấy kích thước của nút
+        const buttonWidth = noButton.offsetWidth;
+        const buttonHeight = noButton.offsetHeight;
+
+        // Tính toán vị trí tối đa mà nút có thể di chuyển đến để không bị ra khỏi khung
+        const maxX = containerWidth - buttonWidth;
+        const maxY = containerHeight - buttonHeight;
+
+        // Tạo tọa độ X, Y ngẫu nhiên trong khoảng cho phép
+        const randomX = Math.floor(Math.random() * maxX);
+        const randomY = Math.floor(Math.random() * maxY);
+
+        // Áp dụng vị trí mới cho nút "No"
+        noButton.style.left = `${randomX}px`;
+        noButton.style.top = `${randomY}px`;
+      };
+
+      // Gắn sự kiện: khi di chuột qua nút "No", nó sẽ chạy đi chỗ khác
+      noButton.addEventListener("mouseover", moveButton);
+      // Gắn thêm sự kiện click để hỗ trợ cả trên thiết bị di động (cảm ứng)
+      noButton.addEventListener("click", moveButton);
+    </script>
+  </body>
+</html>
