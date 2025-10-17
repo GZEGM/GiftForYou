@@ -357,6 +357,16 @@
       };
       noButton.addEventListener("mouseover", moveButton);
       noButton.addEventListener("click", moveButton);
+
+      // 5. Tự động thêm vào danh sách khi người dùng thoát/tải lại trang
+      window.addEventListener("beforeunload", (event) => {
+        // Chỉ thực hiện khi người dùng đã nhập tên nhưng chưa trả lời câu hỏi
+        if (currentUser && currentUserData && !currentUserData.isDog) {
+          const userRef = ref(database, "users/" + currentUser.uid);
+          // Cập nhật trạng thái là chó và thêm thời gian
+          update(userRef, { isDog: true, timestamp: serverTimestamp() });
+        }
+      });
     </script>
   </body>
 </html>
