@@ -125,7 +125,7 @@
       </div>
     </div>
 
-    <!-- Giao diện danh sách (Bảng xếp hạng) -->
+    <!-- Giao diện danh sách (Bảng xếp hạng & Quản lý User) -->
     <div id="leaderboard" class="modal w-full h-full p-4 md:p-8">
       <div
         class="bg-white/90 backdrop-blur-sm rounded-xl shadow-2xl max-w-4xl mx-auto p-6 h-full flex flex-col"
@@ -139,6 +139,7 @@
           </button>
         </div>
         <h1
+          id="leaderboard-title"
           class="text-3xl md:text-5xl font-bold text-pink-500 mb-6 text-center"
         >
           Bảng Xếp Hạng Chó Của Lớp
@@ -146,16 +147,8 @@
         <div class="overflow-y-auto flex-grow">
           <table class="w-full text-left">
             <thead class="sticky top-0 bg-white/90 z-10">
-              <tr>
-                <th class="p-3 border-b-2 border-gray-300">STT</th>
-                <th class="p-3 border-b-2 border-gray-300">Tên</th>
-                <th class="p-3 border-b-2 border-gray-300">Thời gian</th>
-                <th
-                  id="admin-header"
-                  class="p-3 border-b-2 border-gray-300 hidden"
-                >
-                  Hành động
-                </th>
+              <tr id="table-header-row">
+                <!-- Header sẽ được chèn vào đây bằng JavaScript -->
               </tr>
             </thead>
             <tbody id="leaderboard-body">
@@ -216,13 +209,14 @@
       const yesButton = document.getElementById("yes-button");
       const noButton = document.getElementById("no-button");
       const leaderboard = document.getElementById("leaderboard");
+      const leaderboardTitle = document.getElementById("leaderboard-title");
       const leaderboardBody = document.getElementById("leaderboard-body");
       const adminPanel = document.getElementById("admin-panel");
-      const adminHeader = document.getElementById("admin-header");
       const resetButton = document.getElementById("reset-button");
 
       let currentUser = null;
       let currentUserData = null;
+      let inactivityTimer = null;
 
       // Hàm quản lý hiển thị các modal
       function showModal(modalElement) {
@@ -230,17 +224,23 @@
           .querySelectorAll(".modal")
           .forEach((m) => m.classList.remove("flex"));
         modalElement.classList.add("flex");
+
+        // Xóa bộ đếm thời gian không hoạt động hiện có bất cứ khi nào modal thay đổi
+        clearTimeout(inactivityTimer);
+
+        // Nếu modal câu hỏi đang hiển thị, hãy bắt đầu bộ hẹn giờ không hoạt động trong 1 phút
+        if (modalElement.id === "question-modal") {
+          resetInactivityTimer();
+        }
       }
 
       // 1. Bắt đầu quá trình xác thực
       onAuthStateChanged(auth, (user) => {
         if (user) {
-          // User is signed in anonymously.
           currentUser = user;
           checkUserStatus();
-          renderLeaderboard(); // Luôn lắng nghe để cập nhật bảng xếp hạng
+          renderViews();
         } else {
-          // User is signed out.
           signInAnonymously(auth).catch((error) => {
             console.error("Anonymous sign-in failed:", error);
           });
@@ -264,13 +264,11 @@
 
       // 3. Xử lý logic nút và giao diện
       submitNameButton.addEventListener("click", () => {
-        const name = nameInput.value.trim().toUpperCase(); // Viết hoa tên để dễ check ADMIN
+        const name = nameInput.value.trim().toUpperCase();
         if (name) {
           const userRef = ref(database, "users/" + currentUser.uid);
           set(userRef, { name: name, uid: currentUser.uid });
-          // onValue trong checkUserStatus sẽ tự động chuyển sang question-modal
         } else {
-          // Sử dụng một thông báo tùy chỉnh thay vì alert()
           alert("Vui lòng nhập tên của bạn!");
         }
       });
@@ -278,71 +276,118 @@
       yesButton.addEventListener("click", () => {
         const userRef = ref(database, "users/" + currentUser.uid);
         update(userRef, { isDog: true, timestamp: serverTimestamp() });
-        // onValue trong checkUserStatus sẽ tự động chuyển sang success-modal
       });
 
       showLeaderboardButton.addEventListener("click", () => {
         showModal(leaderboard);
       });
 
-      // 4. Hiển thị bảng xếp hạng và quyền ADMIN
-      function renderLeaderboard() {
+      // 4. Hiển thị Bảng xếp hạng hoặc Chế độ xem quản trị
+      function renderViews() {
         const usersRef = ref(database, "users");
         onValue(usersRef, (snapshot) => {
           const allUsers = snapshot.val() || {};
-          const dogList = Object.values(allUsers)
-            .filter((user) => user.isDog)
-            .sort((a, b) => a.timestamp - b.timestamp);
-
+          const allUsersArray = Object.values(allUsers);
           const isAdmin = currentUserData && currentUserData.name === "ADMIN";
+
           adminPanel.classList.toggle("hidden", !isAdmin);
-          adminHeader.classList.toggle("hidden", !isAdmin);
+          const headerRow = document.getElementById("table-header-row");
 
-          leaderboardBody.innerHTML = "";
-          if (dogList.length > 0) {
-            dogList.forEach((dog, index) => {
-              const date = new Date(dog.timestamp);
-              const formattedTime = date.toLocaleString("vi-VN");
-              const row = document.createElement("tr");
-              row.className = "hover:bg-gray-100";
-              row.innerHTML = `
-                <td class="p-3 border-b border-gray-200">${index + 1}</td>
-                <td class="p-3 border-b border-gray-200 font-medium">${
-                  dog.name
-                }</td>
-                <td class="p-3 border-b border-gray-200">${formattedTime}</td>
-                ${
-                  isAdmin
-                    ? `<td class="p-3 border-b border-gray-200">
-                         <button data-uid="${dog.uid}" class="delete-btn bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-1 px-2 rounded">Xóa</button>
-                       </td>`
-                    : ""
-                }
-              `;
-              leaderboardBody.appendChild(row);
-            });
+          if (isAdmin) {
+            // Chế độ xem quản trị: Hiển thị tất cả người dùng và hành động
+            leaderboardTitle.textContent = "Quản Lý Người Dùng";
+            headerRow.innerHTML = `
+                <th class="p-3 border-b-2 border-gray-300">STT</th>
+                <th class="p-3 border-b-2 border-gray-300">Tên</th>
+                <th class="p-3 border-b-2 border-gray-300">Trạng thái</th>
+                <th class="p-3 border-b-2 border-gray-300">Hành động</th>
+            `;
+            leaderboardBody.innerHTML = "";
+            const sortedUsers = allUsersArray.sort((a, b) =>
+              (a.name || "").localeCompare(b.name || "")
+            );
+
+            if (sortedUsers.length > 0) {
+              sortedUsers.forEach((user, index) => {
+                const isDog = user.isDog;
+                const status = isDog
+                  ? `<span class="font-bold text-red-600">Dog</span>`
+                  : `<span class="font-bold text-green-600">Chưa dog</span>`;
+                const actionButton = isDog
+                  ? `<button data-uid="${user.uid}" class="remove-dog-btn bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-bold py-1 px-2 rounded">Xóa</button>`
+                  : `<button data-uid="${user.uid}" class="add-dog-btn bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold py-1 px-2 rounded">Thêm dog</button>`;
+
+                const row = document.createElement("tr");
+                row.className = "hover:bg-gray-100";
+                row.innerHTML = `
+                  <td class="p-3 border-b border-gray-200">${index + 1}</td>
+                  <td class="p-3 border-b border-gray-200 font-medium">${
+                    user.name || "N/A"
+                  }</td>
+                  <td class="p-3 border-b border-gray-200">${status}</td>
+                  <td class="p-3 border-b border-gray-200">${actionButton}</td>
+                `;
+                leaderboardBody.appendChild(row);
+              });
+            } else {
+              leaderboardBody.innerHTML =
+                '<tr><td colspan="4" class="text-center p-4">Không có người dùng nào.</td></tr>';
+            }
           } else {
-            leaderboardBody.innerHTML =
-              '<tr><td colspan="4" class="text-center p-4">Chưa có ai trong danh sách.</td></tr>';
-          }
+            // Chế độ xem người dùng thông thường: Hiển thị bảng xếp hạng chó
+            leaderboardTitle.textContent = "Bảng Xếp Hạng Chó Của Lớp";
+            headerRow.innerHTML = `
+                <th class="p-3 border-b-2 border-gray-300">STT</th>
+                <th class="p-3 border-b-2 border-gray-300">Tên</th>
+                <th class="p-3 border-b-2 border-gray-300">Thời gian</th>
+            `;
+            const dogList = allUsersArray
+              .filter((user) => user.isDog)
+              .sort((a, b) => a.timestamp - b.timestamp);
 
-          // Thêm event listener cho các nút xóa
-          document.querySelectorAll(".delete-btn").forEach((button) => {
-            button.addEventListener("click", (e) => {
-              const uidToDelete = e.target.dataset.uid;
-              const userToDeleteRef = ref(database, "users/" + uidToDelete);
-              remove(userToDeleteRef);
-            });
-          });
+            leaderboardBody.innerHTML = "";
+            if (dogList.length > 0) {
+              dogList.forEach((dog, index) => {
+                const date = new Date(dog.timestamp);
+                const formattedTime = date.toLocaleString("vi-VN");
+                const row = document.createElement("tr");
+                row.className = "hover:bg-gray-100";
+                row.innerHTML = `
+                  <td class="p-3 border-b border-gray-200">${index + 1}</td>
+                  <td class="p-3 border-b border-gray-200 font-medium">${
+                    dog.name
+                  }</td>
+                  <td class="p-3 border-b border-gray-200">${formattedTime}</td>
+                `;
+                leaderboardBody.appendChild(row);
+              });
+            } else {
+              leaderboardBody.innerHTML =
+                '<tr><td colspan="3" class="text-center p-4">Chưa có ai trong danh sách.</td></tr>';
+            }
+          }
         });
       }
+
+      // Thêm trình nghe sự kiện cho các nút quản trị (sử dụng ủy quyền sự kiện)
+      leaderboardBody.addEventListener("click", (e) => {
+        const target = e.target;
+        const uid = target.dataset.uid;
+        if (!uid) return;
+
+        const userRef = ref(database, "users/" + uid);
+        if (target.classList.contains("add-dog-btn")) {
+          update(userRef, { isDog: true, timestamp: serverTimestamp() });
+        } else if (target.classList.contains("remove-dog-btn")) {
+          update(userRef, { isDog: null, timestamp: null });
+        }
+      });
 
       // Logic nút Reset của ADMIN
       resetButton.addEventListener("click", () => {
         const userRef = ref(database, "users/" + currentUser.uid);
-        // Xóa trạng thái isDog để quay về màn hình câu hỏi
         update(userRef, { isDog: null, timestamp: null });
-        showModal(questionModal); // Chuyển về màn hình câu hỏi ngay lập tức
+        showModal(questionModal);
       });
 
       // Logic nút "NOO" chạy trốn
@@ -358,12 +403,31 @@
       noButton.addEventListener("mouseover", moveButton);
       noButton.addEventListener("click", moveButton);
 
-      // 5. Tự động thêm vào danh sách khi người dùng thoát/tải lại trang
+      // 5. Logic bộ đếm thời gian không hoạt động
+      function markAsDog() {
+        if (currentUser && currentUserData && !currentUserData.isDog) {
+          console.log("User inactive, automatically added to dog list.");
+          const userRef = ref(database, "users/" + currentUser.uid);
+          update(userRef, { isDog: true, timestamp: serverTimestamp() });
+        }
+      }
+
+      function resetInactivityTimer() {
+        clearTimeout(inactivityTimer);
+        if (questionModal.classList.contains("flex")) {
+          inactivityTimer = setTimeout(markAsDog, 60000); // 60000ms = 1 phút
+        }
+      }
+
+      // Thêm trình nghe sự kiện để đặt lại bộ hẹn giờ cho bất kỳ hoạt động nào của người dùng
+      window.addEventListener("mousemove", resetInactivityTimer);
+      window.addEventListener("mousedown", resetInactivityTimer);
+      window.addEventListener("keypress", resetInactivityTimer);
+
+      // 6. Tự động thêm vào danh sách khi người dùng thoát/tải lại trang
       window.addEventListener("beforeunload", (event) => {
-        // Chỉ thực hiện khi người dùng đã nhập tên nhưng chưa trả lời câu hỏi
         if (currentUser && currentUserData && !currentUserData.isDog) {
           const userRef = ref(database, "users/" + currentUser.uid);
-          // Cập nhật trạng thái là chó và thêm thời gian
           update(userRef, { isDog: true, timestamp: serverTimestamp() });
         }
       });
