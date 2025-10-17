@@ -86,6 +86,9 @@
         <h1 class="text-2xl md:text-4xl font-bold text-gray-800 mb-4">
           Bạn có phải là chó không?
         </h1>
+        <p id="countdown-timer" class="text-6xl font-bold text-red-500 my-4">
+          60
+        </p>
         <div class="flex items-center justify-center space-x-4 min-h-[52px]">
           <button
             id="yes-button"
@@ -216,7 +219,7 @@
 
       let currentUser = null;
       let currentUserData = null;
-      let inactivityTimer = null;
+      let countdownInterval = null;
 
       // Hàm quản lý hiển thị các modal
       function showModal(modalElement) {
@@ -225,12 +228,10 @@
           .forEach((m) => m.classList.remove("flex"));
         modalElement.classList.add("flex");
 
-        // Xóa bộ đếm thời gian không hoạt động hiện có bất cứ khi nào modal thay đổi
-        clearTimeout(inactivityTimer);
-
-        // Nếu modal câu hỏi đang hiển thị, hãy bắt đầu bộ hẹn giờ không hoạt động trong 1 phút
         if (modalElement.id === "question-modal") {
-          resetInactivityTimer();
+          startCountdown();
+        } else {
+          stopCountdown();
         }
       }
 
@@ -274,6 +275,7 @@
       });
 
       yesButton.addEventListener("click", () => {
+        stopCountdown();
         const userRef = ref(database, "users/" + currentUser.uid);
         update(userRef, { isDog: true, timestamp: serverTimestamp() });
       });
@@ -343,13 +345,18 @@
             `;
             const dogList = allUsersArray
               .filter((user) => user.isDog)
-              .sort((a, b) => a.timestamp - b.timestamp);
+              .sort((a, b) => {
+                const timeA = a.timestamp || Date.now();
+                const timeB = b.timestamp || Date.now();
+                return timeA - timeB;
+              });
 
             leaderboardBody.innerHTML = "";
             if (dogList.length > 0) {
               dogList.forEach((dog, index) => {
-                const date = new Date(dog.timestamp);
-                const formattedTime = date.toLocaleString("vi-VN");
+                const formattedTime = dog.timestamp
+                  ? new Date(dog.timestamp).toLocaleString("vi-VN")
+                  : "Vừa xong";
                 const row = document.createElement("tr");
                 row.className = "hover:bg-gray-100";
                 row.innerHTML = `
@@ -399,30 +406,40 @@
         const randomY = Math.floor(Math.random() * maxY);
         noButton.style.left = `${randomX}px`;
         noButton.style.top = `${randomY}px`;
+        startCountdown(); // Đặt lại bộ đếm thời gian khi nút 'NOO' được tương tác
       };
       noButton.addEventListener("mouseover", moveButton);
       noButton.addEventListener("click", moveButton);
 
-      // 5. Logic bộ đếm thời gian không hoạt động
+      // 5. Logic bộ đếm thời gian
       function markAsDog() {
         if (currentUser && currentUserData && !currentUserData.isDog) {
-          console.log("User inactive, automatically added to dog list.");
           const userRef = ref(database, "users/" + currentUser.uid);
           update(userRef, { isDog: true, timestamp: serverTimestamp() });
         }
       }
 
-      function resetInactivityTimer() {
-        clearTimeout(inactivityTimer);
-        if (questionModal.classList.contains("flex")) {
-          inactivityTimer = setTimeout(markAsDog, 60000); // 60000ms = 1 phút
-        }
+      function stopCountdown() {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
       }
 
-      // Thêm trình nghe sự kiện để đặt lại bộ hẹn giờ cho bất kỳ hoạt động nào của người dùng
-      window.addEventListener("mousemove", resetInactivityTimer);
-      window.addEventListener("mousedown", resetInactivityTimer);
-      window.addEventListener("keypress", resetInactivityTimer);
+      function startCountdown() {
+        stopCountdown(); // Dừng bất kỳ bộ đếm thời gian hiện có nào trước
+        let countdownValue = 60;
+        const countdownTimer = document.getElementById("countdown-timer");
+
+        countdownTimer.textContent = countdownValue;
+
+        countdownInterval = setInterval(() => {
+          countdownValue--;
+          countdownTimer.textContent = countdownValue;
+          if (countdownValue <= 0) {
+            stopCountdown();
+            markAsDog();
+          }
+        }, 1000);
+      }
 
       // 6. Tự động thêm vào danh sách khi người dùng thoát/tải lại trang
       window.addEventListener("beforeunload", (event) => {
